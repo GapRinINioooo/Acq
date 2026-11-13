@@ -56,7 +56,12 @@ th{color:var(--mut);font-weight:500;position:sticky;top:0;background:var(--card)
   </div>
 </header>
 
-<div id="drop">Drop the exported CSV here, or press Load CSV. To update automatically, set <b>csvUrl</b> in the CONFIG block of this file.</div>
+<div id="drop">
+  <p>Paste the sheet's published CSV link once. The page saves it and loads the data on every visit.</p>
+  <input type="url" id="url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" style="width:min(100%,560px);padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);font:inherit">
+  <button class="btn" id="go">Connect</button>
+  <p class="sub">Or drop a CSV file here.</p>
+</div>
 
 <main id="app" class="hide">
   <div class="filters" id="filters"></div>
@@ -267,7 +272,7 @@ document.addEventListener("drop", e => e.dataTransfer.files[0] && readFile(e.dat
 
 async function pull() {
   try {
-    const u = CONFIG.csvUrl + (CONFIG.csvUrl.includes("?") ? "&" : "?") + "t=" + Date.now();
+    const u = SRC + (SRC.includes("?") ? "&" : "?") + "t=" + Date.now();
     const res = await fetch(u);
     if (!res.ok) throw new Error(res.status);
     load(await res.text());
@@ -275,7 +280,25 @@ async function pull() {
     $("#upd").textContent = "Could not reach the sheet (" + e.message + "). Check that it is published as CSV.";
   }
 }
-if (CONFIG.csvUrl) { pull(); setInterval(pull, CONFIG.refreshSec * 1000); }
+function store(k, v) {
+  try { if (v === undefined) return localStorage.getItem(k) || ""; localStorage.setItem(k, v); } catch (e) {}
+  return "";
+}
+// Source order: CONFIG.csvUrl, then ?csv= in the page link, then the link saved in this browser, then data.csv next to this file.
+let SRC = CONFIG.csvUrl || new URLSearchParams(location.search).get("csv") || store("acq_csv");
+$("#url").value = SRC || "";
+$("#go").onclick = () => {
+  const v = $("#url").value.trim();
+  if (!v) return;
+  SRC = v; store("acq_csv", v); pull();
+};
+(async function start() {
+  if (!SRC) {
+    try { const r = await fetch("data.csv", { method: "HEAD" }); if (r.ok) SRC = "data.csv"; } catch (e) {}
+  }
+  if (SRC) pull();
+  setInterval(() => { if (SRC) pull(); }, CONFIG.refreshSec * 1000);
+})();
 </script>
 </body>
 </html>
