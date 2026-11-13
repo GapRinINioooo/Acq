@@ -277,7 +277,7 @@ async function pull() {
     if (!res.ok) throw new Error(res.status);
     load(await res.text());
   } catch (e) {
-    $("#upd").textContent = "Could not reach the sheet (" + e.message + "). Check that it is published as CSV.";
+    $("#upd").textContent = "Could not read the sheet (" + e.message + "). Set sharing to 'Anyone with the link: Viewer', or publish the tab as CSV.";
   }
 }
 function store(k, v) {
@@ -285,12 +285,20 @@ function store(k, v) {
   return "";
 }
 // Source order: CONFIG.csvUrl, then ?csv= in the page link, then the link saved in this browser, then data.csv next to this file.
-let SRC = CONFIG.csvUrl || new URLSearchParams(location.search).get("csv") || store("acq_csv");
+// Accepts a normal Google Sheets link (edit/share) and turns it into a CSV link for the same tab.
+function normalize(u) {
+  u = (u || "").trim();
+  const m = u.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (!m || m[1] === "e" || u.includes("output=csv") || u.includes("tqx=")) return u;
+  const g = (u.match(/[?&#]gid=(\d+)/) || [])[1];
+  return "https://docs.google.com/spreadsheets/d/" + m[1] + "/gviz/tq?tqx=out:csv" + (g ? "&gid=" + g : "");
+}
+let SRC = normalize(CONFIG.csvUrl || new URLSearchParams(location.search).get("csv") || store("acq_csv"));
 $("#url").value = SRC || "";
 $("#go").onclick = () => {
   const v = $("#url").value.trim();
   if (!v) return;
-  SRC = v; store("acq_csv", v); pull();
+  SRC = normalize(v); $("#url").value = SRC; store("acq_csv", SRC); pull();
 };
 (async function start() {
   if (!SRC) {
